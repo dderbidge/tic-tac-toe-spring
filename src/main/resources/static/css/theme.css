@@ -1,0 +1,177 @@
+:root {
+    /* Background layers */
+    --bg-deep:   #0a0518;
+    --bg-mid:    #1a1530;
+    --bg-nebula: #2a1a4a;
+
+    /* Faction colors */
+    --color-gold:         #ffd76b;
+    --color-gold-glow:    rgba(255, 200, 80, 0.85);
+    --color-crimson:      #ff7a9e;
+    --color-crimson-glow: rgba(255, 80, 140, 0.85);
+
+    /* UI text */
+    --text-primary:   #e8e2ff;
+    --text-secondary: #b8b0d8;
+    --text-mute:      #6a6088;
+
+    /* Typography */
+    --font-serif: 'Spectral', 'Cormorant Garamond', Georgia, serif;
+    --font-ui:    'Inter', system-ui, -apple-system, sans-serif;
+
+    /* PNG asset slots — Phase 2 swaps these */
+    --asset-ascendant-sigil: url('/img/ascendant-sigil.svg');
+    --asset-vanguard-sigil:  url('/img/vanguard-sigil.svg');
+    --asset-backdrop:        none;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    font-family: var(--font-ui);
+    color: var(--text-primary);
+    background: var(--bg-deep);
+}
+
+body {
+    background:
+        radial-gradient(1px 1px at 12% 18%, #fff 50%, transparent 51%),
+        radial-gradient(1px 1px at 28% 64%, #fff 50%, transparent 51%),
+        radial-gradient(1px 1px at 45% 32%, #ffeec7 50%, transparent 51%),
+        radial-gradient(2px 2px at 62% 78%, #fff 50%, transparent 51%),
+        radial-gradient(1px 1px at 78% 22%, #cad9ff 50%, transparent 51%),
+        radial-gradient(1px 1px at 88% 70%, #fff 50%, transparent 51%),
+        radial-gradient(1px 1px at 8% 88%, #ffeec7 50%, transparent 51%),
+        radial-gradient(1px 1px at 35% 8%, #fff 50%, transparent 51%),
+        radial-gradient(2px 2px at 70% 48%, #fff 50%, transparent 51%),
+        radial-gradient(ellipse 60% 40% at 30% 70%, var(--bg-nebula), transparent 70%),
+        radial-gradient(ellipse 50% 35% at 75% 30%, var(--bg-mid), transparent 70%),
+        radial-gradient(ellipse at center, var(--bg-mid) 0%, var(--bg-deep) 70%);
+    background-attachment: fixed;
+}
+
+/* When --asset-backdrop is overridden to a url(), this layer becomes visible. */
+body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: var(--asset-backdrop);
+    background-size: cover;
+    background-position: center;
+    opacity: 0.6;
+    pointer-events: none;
+    z-index: -1;
+}
+
+#app, .app-shell {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.app-main {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+
+/* Headings */
+.title, .subtitle, h1, h2 {
+    font-family: var(--font-serif);
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 16px;
+}
+.title {
+    font-size: clamp(28px, 5vw, 48px);
+    letter-spacing: 0.02em;
+    text-align: center;
+}
+.tagline {
+    font-family: var(--font-serif);
+    font-style: italic;
+    color: var(--text-secondary);
+    text-align: center;
+    margin: 0 0 32px;
+    font-size: clamp(14px, 2vw, 18px);
+}
+.subtitle {
+    font-size: clamp(18px, 3vw, 24px);
+    text-align: center;
+}
+
+/* Buttons */
+.btn {
+    border: 1px solid rgba(232, 226, 255, 0.2);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-primary);
+    font-family: var(--font-ui);
+    font-size: 16px;
+    padding: 12px 24px;
+    border-radius: 4px;
+    cursor: pointer;
+    min-height: 48px;
+    transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+.btn:hover { background: rgba(255, 255, 255, 0.08); border-color: rgba(232, 226, 255, 0.4); }
+.btn:active { transform: translateY(1px); }
+.btn-primary { border-color: var(--color-gold); }
+.btn-primary:hover { background: rgba(255, 215, 107, 0.1); }
+.btn-secondary { color: var(--text-secondary); }
+.btn-link {
+    background: none; border: none; color: var(--text-mute);
+    font-size: 12px; min-height: auto; padding: 4px 8px;
+    text-transform: uppercase; letter-spacing: 0.08em;
+}
+.btn-link:hover { color: var(--text-secondary); }
+
+.menu-panel {
+    max-width: 600px;
+    width: 100%;
+    text-align: center;
+}
+.menu-buttons {
+    display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;
+    margin-top: 16px;
+}
+
+.faction-row, .difficulty-row {
+    display: grid;
+    gap: 12px;
+    margin: 16px 0 32px;
+}
+.faction-row { grid-template-columns: 1fr 1fr; }
+.difficulty-row { grid-template-columns: repeat(3, 1fr); }
+
+@media (max-width: 480px) {
+    .faction-row, .difficulty-row { grid-template-columns: 1fr; }
+    .menu-buttons { flex-direction: column; }
+    .menu-buttons .btn { width: 100%; }
+}
+
+.faction-card, .difficulty-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(232, 226, 255, 0.15);
+    border-radius: 4px;
+    padding: 16px;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    font-family: var(--font-ui);
+    text-align: center;
+}
+.faction-card.selected { border-color: var(--color-gold); background: rgba(255, 215, 107, 0.06); }
+.faction-card.faction-vanguard.selected { border-color: var(--color-crimson); background: rgba(255, 122, 158, 0.06); }
+.difficulty-card.selected { border-color: var(--color-gold); background: rgba(255, 215, 107, 0.06); }
+.faction-name, .difficulty-name {
+    font-family: var(--font-serif);
+    font-size: 18px;
+    margin: 8px 0 4px;
+}
+.faction-note, .difficulty-note {
+    font-size: 12px;
+    color: var(--text-mute);
+}

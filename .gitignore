@@ -1,0 +1,21 @@
+# Gradle
+.gradle/
+build/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# e2e (Node + Playwright)
+e2e/node_modules/
+e2e/test-results/
+e2e/playwright-report/
+
+# Playwright MCP / smoke screenshots
+.playwright-mcp/
+/*.png

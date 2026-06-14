@@ -1,0 +1,195 @@
+/* ── Lobby ─────────────────────────────────────────────────────────── */
+.lobby-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    align-items: center;
+    width: 100%;
+    max-width: 540px;
+}
+.lobby-self {
+    text-align: center;
+    color: var(--text-secondary);
+    font-family: var(--font-serif);
+}
+.lobby-self .your-name {
+    color: var(--color-gold);
+    font-size: clamp(20px, 3vw, 28px);
+    font-weight: 600;
+    margin-top: 4px;
+}
+.lobby-empty {
+    color: var(--text-mute);
+    font-style: italic;
+    text-align: center;
+    margin: 24px 0;
+}
+.lobby-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+}
+.lobby-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(232, 226, 255, 0.12);
+    border-radius: 4px;
+    padding: 12px 16px;
+}
+.lobby-row .name {
+    font-family: var(--font-serif);
+    font-size: 18px;
+    color: var(--text-primary);
+}
+.lobby-row .btn-challenge {
+    border-color: var(--color-gold);
+    padding: 6px 14px;
+    min-height: 32px;
+    font-size: 14px;
+}
+
+.lobby-pending {
+    text-align: center;
+    color: var(--color-gold);
+    font-style: italic;
+    padding: 24px 0;
+}
+
+/* ── Challenge prompt modal ───────────────────────────────────────── */
+.challenge-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+}
+.challenge-modal {
+    background: linear-gradient(180deg, var(--bg-mid), var(--bg-deep));
+    border: 1px solid var(--color-gold);
+    border-radius: 6px;
+    padding: 24px;
+    max-width: 360px;
+    width: 90%;
+    text-align: center;
+    box-shadow: 0 0 32px rgba(255, 215, 107, 0.2);
+}
+.challenge-modal h3 {
+    font-family: var(--font-serif);
+    color: var(--color-gold);
+    margin: 0 0 8px;
+}
+.challenge-modal p {
+    color: var(--text-secondary);
+    margin: 0 0 20px;
+}
+.challenge-countdown-bar {
+    height: 4px;
+    background: rgba(255, 215, 107, 0.15);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 16px;
+}
+.challenge-countdown-bar > div {
+    height: 100%;
+    background: var(--color-gold);
+    transition: width 1s linear;
+}
+.challenge-modal .menu-buttons {
+    margin-top: 0;
+}
+
+/* ── Disconnect banner ─────────────────────────────────────────────── */
+.disconnect-banner {
+    background: rgba(255, 122, 158, 0.08);
+    border: 1px solid var(--color-crimson);
+    border-radius: 4px;
+    padding: 8px 14px;
+    color: var(--color-crimson);
+    font-size: 14px;
+    text-align: center;
+    width: min(60vmin, 480px);
+}
+.disconnect-banner .countdown {
+    font-family: var(--font-serif);
+    font-weight: 600;
+    margin-left: 6px;
+}
+
+@media (max-width: 480px) {
+    .lobby-panel { max-width: none; padding: 0 16px; }
+    .lobby-row { flex-direction: column; gap: 8px; align-items: stretch; }
+    .lobby-row .btn-challenge { width: 100%; }
+}
+
+/* ── Reconnect overlay (Blazor circuit reconnection) ───────────────── */
+/* Hidden by default. Blazor toggles `.components-reconnect-show`,
+   `.components-reconnect-failed`, or `.components-reconnect-rejected`
+   on the #components-reconnect-modal element when the SignalR circuit
+   needs attention. */
+.reconnect-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(10, 5, 24, 0.85);
+    backdrop-filter: blur(4px);
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+.reconnect-modal.components-reconnect-show,
+.reconnect-modal.components-reconnect-failed,
+.reconnect-modal.components-reconnect-rejected {
+    display: flex;
+}
+.reconnect-card {
+    background: linear-gradient(180deg, var(--bg-mid), var(--bg-deep));
+    border: 1px solid var(--color-gold);
+    border-radius: 6px;
+    padding: 28px 32px;
+    max-width: 360px;
+    width: 90%;
+    text-align: center;
+    box-shadow: 0 0 32px rgba(255, 215, 107, 0.2);
+}
+.reconnect-spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid rgba(255, 215, 107, 0.2);
+    border-top-color: var(--color-gold);
+    border-radius: 50%;
+    margin: 0 auto 16px;
+    animation: reconnect-spin 0.9s linear infinite;
+}
+@keyframes reconnect-spin {
+    to { transform: rotate(360deg); }
+}
+.reconnect-text {
+    font-family: var(--font-serif);
+    font-size: 18px;
+    color: var(--color-gold);
+    margin-bottom: 6px;
+}
+.reconnect-subtext {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+/* When reconnect outright fails, swap the spinner accent to crimson so the user sees something changed. */
+.reconnect-modal.components-reconnect-failed .reconnect-spinner,
+.reconnect-modal.components-reconnect-rejected .reconnect-spinner {
+    border-color: rgba(255, 122, 158, 0.2);
+    border-top-color: var(--color-crimson);
+}
+.reconnect-modal.components-reconnect-failed .reconnect-card,
+.reconnect-modal.components-reconnect-rejected .reconnect-card {
+    border-color: var(--color-crimson);
+    box-shadow: 0 0 32px rgba(255, 122, 158, 0.2);
+}
+.reconnect-modal.components-reconnect-failed .reconnect-text,
+.reconnect-modal.components-reconnect-rejected .reconnect-text {
+    color: var(--color-crimson);
+}

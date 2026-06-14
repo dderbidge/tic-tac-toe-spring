@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <defs>
+    <radialGradient id="goldGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#fff5d4"/>
+      <stop offset="40%" stop-color="#ffd76b"/>
+      <stop offset="100%" stop-color="#c08a00"/>
+    </radialGradient>
+    <filter id="goldBloom" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <g filter="url(#goldBloom)" fill="url(#goldGlow)">
+    <!-- 12 rays -->
+    <g transform="translate(128 128)">
+      <g>
+        <path d="M0 -100 L8 -50 L-8 -50 Z"/>
+      </g>
+      <g transform="rotate(30)">
+        <path d="M0 -100 L8 -50 L-8 -50 Z"/>
+      </g>
+      <g transform="rotate(60)">
+        <path d="M0 -100 L8 -50 L-8 -50 Z"/>
+      </g>
+      <g transform="rotate(90)">
+        <path d="M0 -100 L8 -50 L-8 -50 Z"/>
+      </g>
+      <g transform="rotate(120)">
+        <path d="M0 -100 L8 -50 L-8 -50 Z"/>
+      </g>
+      <g transform="rotate(150)">
+        <path d="M0 -100 L8 -50 L-8 -50 Z"/>
+      </g>
+      <g transform="rotate(180)">
+        <path d="M0 -100 L8 -50 L-8 -50 Z"/>
+      </g>
+      <g transform="rotate(210)">
+        <path d="M0 -100 L8 -50 L-8 -50 Z"/>
+      </g>
+      <g transform="rotate(240)">
+        <path d="M0 -100 L8 -50 L-8 -50 Z"/>
+      </g>
+      <g transform="rotate(270)">
+        <path d="M0 -100 L8 -50 L-8 -50 Z"/>
+      </g>
+      <g transform="rotate(300)">
+        <path d="M0 -100 L8 -50 L-8 -50 Z"/>
+      </g>
+      <g transform="rotate(330)">
+        <path d="M0 -100 L8 -50 L-8 -50 Z"/>
+      </g>
+    </g>
+    <!-- core disc -->
+    <circle cx="128" cy="128" r="36"/>
+  </g>
+</svg>

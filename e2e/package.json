@@ -1,0 +1,13 @@
+{
+  "name": "tictactoe-e2e",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Playwright browser smoke for the Order vs Rebellion multiplayer client.",
+  "scripts": {
+    "test": "playwright test",
+    "install-browsers": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0"
+  }
+}

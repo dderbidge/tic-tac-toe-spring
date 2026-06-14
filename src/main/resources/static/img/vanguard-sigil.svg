@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <defs>
+    <radialGradient id="crimsonGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffd0e0"/>
+      <stop offset="40%" stop-color="#ff7a9e"/>
+      <stop offset="100%" stop-color="#9b1d3d"/>
+    </radialGradient>
+    <filter id="crimsonBloom" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <g filter="url(#crimsonBloom)" fill="url(#crimsonGlow)">
+    <g transform="translate(128 128)">
+      <!-- 4 main points -->
+      <path d="M0 -100 L20 -10 L0 0 L-20 -10 Z"/>
+      <path d="M100 0 L10 20 L0 0 L10 -20 Z"/>
+      <path d="M0 100 L-20 10 L0 0 L20 10 Z"/>
+      <path d="M-100 0 L-10 -20 L0 0 L-10 20 Z"/>
+      <!-- 4 diagonal accents -->
+      <g opacity="0.7">
+        <path d="M55 -55 L8 -8 L0 0 L-8 8 L55 -55Z" transform="rotate(45)"/>
+        <path d="M55 -55 L8 -8 L0 0 L-8 8 L55 -55Z" transform="rotate(135)"/>
+        <path d="M55 -55 L8 -8 L0 0 L-8 8 L55 -55Z" transform="rotate(225)"/>
+        <path d="M55 -55 L8 -8 L0 0 L-8 8 L55 -55Z" transform="rotate(315)"/>
+      </g>
+    </g>
+    <circle cx="128" cy="128" r="14"/>
+  </g>
+</svg>
