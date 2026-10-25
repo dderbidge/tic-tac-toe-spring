@@ -38,54 +38,55 @@ public class LocalGameController {
     }
 
     @MessageMapping("/local/state")
-    public void requestState(@Header("simpSessionId") String connId) {
+    public synchronized void requestState(@Header("simpSessionId") String connId) {
         pushState(connId, localGames.getOrCreate(connId));
     }
 
     @MessageMapping("/local/hotseat")
-    public void startHotSeat(@Header("simpSessionId") String connId) {
+    public synchronized void startHotSeat(@Header("simpSessionId") String connId) {
         LocalGame game = localGames.getOrCreate(connId);
         game.startHotSeat();
         pushState(connId, game);
     }
 
     @MessageMapping("/local/setup")
-    public void goToModeSetup(@Header("simpSessionId") String connId) {
+    public synchronized void goToModeSetup(@Header("simpSessionId") String connId) {
         LocalGame game = localGames.getOrCreate(connId);
         game.goToModeSetup();
         pushState(connId, game);
     }
 
     @MessageMapping("/local/vs-computer")
-    public void startVsComputer(@Header("simpSessionId") String connId, @Payload StartVsComputerRequest req) {
+    public synchronized void startVsComputer(@Header("simpSessionId") String connId, @Payload StartVsComputerRequest req) {
+        if (req == null) return;
         LocalGame game = localGames.getOrCreate(connId);
         game.startVersusComputer(parseFaction(req.faction()), parseDifficulty(req.difficulty()));
         pushState(connId, game);
     }
 
     @MessageMapping("/local/move")
-    public void move(@Header("simpSessionId") String connId, @Payload LocalMoveRequest req) {
+    public synchronized void move(@Header("simpSessionId") String connId, @Payload LocalMoveRequest req) {
         LocalGame game = localGames.getOrCreate(connId);
-        game.tryHumanMove(req.row(), req.col());
+        if (req != null && req.row() != null && req.col() != null) game.tryHumanMove(req.row(), req.col());
         pushState(connId, game);
     }
 
     @MessageMapping("/local/play-again")
-    public void playAgain(@Header("simpSessionId") String connId) {
+    public synchronized void playAgain(@Header("simpSessionId") String connId) {
         LocalGame game = localGames.getOrCreate(connId);
         game.playAgain();
         pushState(connId, game);
     }
 
     @MessageMapping("/local/main-menu")
-    public void mainMenu(@Header("simpSessionId") String connId) {
+    public synchronized void mainMenu(@Header("simpSessionId") String connId) {
         LocalGame game = localGames.getOrCreate(connId);
         game.goToMainMenu();
         pushState(connId, game);
     }
 
     @MessageMapping("/local/reset")
-    public void resetScores(@Header("simpSessionId") String connId) {
+    public synchronized void resetScores(@Header("simpSessionId") String connId) {
         LocalGame game = localGames.getOrCreate(connId);
         game.resetScores();
         pushState(connId, game);

@@ -1,11 +1,17 @@
 plugins {
     java
-    id("org.springframework.boot") version "3.3.5"
+    id("org.springframework.boot") version "3.5.16"
     id("io.spring.dependency-management") version "1.1.6"
 }
 
 group = "com.derbysquad"
 version = "0.1.0-SNAPSHOT"
+
+// Security maintenance releases newer than Boot's managed versions.
+// Recheck these overrides when upgrading Spring Boot.
+extra["tomcat.version"] = "10.1.61"
+extra["jackson-bom.version"] = "2.21.7"
+extra["log4j2.version"] = "2.25.5"
 
 java {
     toolchain {

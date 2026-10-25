@@ -1,6 +1,7 @@
 package com.derbysquad.tictactoe.multiplayer;
 
 import org.springframework.context.annotation.Configuration;
+import org.springframework.messaging.simp.config.ChannelRegistration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
@@ -22,6 +23,8 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
+        // Process one session's moves/reset commands in the order they arrived.
+        registry.setPreserveReceiveOrder(true);
         registry.addEndpoint("/gamehub").setAllowedOriginPatterns("*");
     }
 
@@ -30,5 +33,12 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         registry.enableSimpleBroker("/topic", "/queue");
         registry.setApplicationDestinationPrefixes("/app");
         registry.setUserDestinationPrefix("/user");
+        // Keep a recipient's final board snapshot ahead of its match-ended event.
+        registry.setPreservePublishOrder(true);
+    }
+
+    @Override
+    public void configureClientInboundChannel(ChannelRegistration registration) {
+        registration.interceptors(new ClientDestinationGuard());
     }
 }

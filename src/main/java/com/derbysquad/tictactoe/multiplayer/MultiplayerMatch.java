@@ -5,6 +5,9 @@ import com.derbysquad.tictactoe.domain.Move;
 import com.derbysquad.tictactoe.domain.Player;
 import java.time.Instant;
 import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ScheduledFuture;
 
 /**
@@ -30,8 +33,9 @@ public final class MultiplayerMatch {
     private boolean draw;
     private List<Move> winningCells;
     private Instant lastActivityAt = Instant.now();
-    private String disconnectedConnId;
-    private ScheduledFuture<?> disconnectTask;
+    // Each seat owns its own deadline. Access is guarded by MatchRegistry.
+    final Map<String, DisconnectLease> disconnects = new HashMap<>();
+    record DisconnectLease(UUID id, Instant expiresAt, ScheduledFuture<?> task) {}
 
     public MultiplayerMatch(String matchId, String ascendantConnId, String ascendantName,
                             String vanguardConnId, String vanguardName,
@@ -87,9 +91,4 @@ public final class MultiplayerMatch {
     public Instant lastActivityAt() { return lastActivityAt; }
     public void setLastActivityAt(Instant v) { this.lastActivityAt = v; }
 
-    public String disconnectedConnId() { return disconnectedConnId; }
-    public void setDisconnectedConnId(String v) { this.disconnectedConnId = v; }
-
-    public ScheduledFuture<?> disconnectTask() { return disconnectTask; }
-    public void setDisconnectTask(ScheduledFuture<?> v) { this.disconnectTask = v; }
 }

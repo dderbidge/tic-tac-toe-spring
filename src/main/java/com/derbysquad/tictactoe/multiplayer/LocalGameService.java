@@ -11,11 +11,8 @@ import org.springframework.stereotype.Service;
  * use {@code @Scope("websocket")} but instead keep an explicit, predictable
  * {@link ConcurrentHashMap} keyed by STOMP session id inside this singleton {@code @Service}.
  *
- * <p><b>Flag (no clean SignalR analog):</b> in the legacy app local play was driven by
- * in-process Blazor method calls, not the hub — there is no SignalR contract for it. The
- * game logic is ported here and entries are cleaned up on disconnect; wiring a STOMP (or
- * REST) transport for local play is a deferred decision, so no {@code @MessageMapping}
- * handlers are invented for it.
+ * <p>In the legacy app local play used in-process Blazor calls. The Spring client uses
+ * {@link LocalGameController}'s explicit STOMP contract; entries are cleaned up on disconnect.
  */
 @Service
 public class LocalGameService {

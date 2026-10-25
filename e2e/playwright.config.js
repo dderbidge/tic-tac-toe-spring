@@ -4,6 +4,7 @@ const { defineConfig } = require("@playwright/test");
 
 module.exports = defineConfig({
     testDir: ".",
+    testMatch: "**/*.spec.js", // Node message-order tests run separately via test:client.
     timeout: 30000,
     expect: { timeout: 10000 },
     use: {
