@@ -1,7 +1,7 @@
 # Order vs Rebellion — Spring Boot edition
 
 A space-opera tic-tac-toe (**The Ascendant ☼ vs The Crimson Vanguard ✦**), ported from a
-.NET 9 solution to **Java 21 + Spring Boot 3.3**. It ships three things from one shared game
+.NET 9 solution to **Java 21 + Spring Boot 3.5**. It ships three things from one shared game
 engine:
 
 - a colourful **terminal** game,

@@ -8,5 +8,5 @@ package com.derbysquad.tictactoe.dto;
  * <p>Note: in the C# original {@code fromName} is set to the <em>decliner's</em> name
  * ({@code c.ToName}); the field name is preserved verbatim.
  */
-public record ChallengeDeclinedEvent(String fromName) {
+public record ChallengeDeclinedEvent(String challengeId, String fromName) {
 }

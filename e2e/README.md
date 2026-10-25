@@ -3,6 +3,15 @@
 Automated browser test for the thin multiplayer client — local vs-CPU and a full
 two-client network match.
 
+The client message-order regressions need only Node.js (no server, packages, or browser):
+
+```bash
+node --test e2e/client-state.test.js
+```
+
+They run the shipped client with fake DOM events and STOMP delivery, covering duplicate
+commands, stale match events, reconnect cancellation, and challenge cancellation.
+
 ```bash
 # from repo root, start the server in one terminal:
 ./gradlew bootRun

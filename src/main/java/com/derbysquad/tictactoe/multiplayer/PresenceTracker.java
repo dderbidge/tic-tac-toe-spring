@@ -43,7 +43,7 @@ public class PresenceTracker {
     }
 
     public PlayerSession get(String connectionId) {
-        return sessions.get(connectionId);
+        return connectionId == null ? null : sessions.get(connectionId);
     }
 
     public List<PlayerSession> snapshotLobby() {
@@ -65,7 +65,12 @@ public class PresenceTracker {
     }
 
     public String currentMatchOf(String connectionId) {
-        return matchByConnection.get(connectionId);
+        return connectionId == null ? null : matchByConnection.get(connectionId);
+    }
+
+    public void restoreMatch(String connectionId, String name, String matchId) {
+        sessions.put(connectionId, new PlayerSession(connectionId, name, Instant.now()));
+        matchByConnection.put(connectionId, matchId);
     }
 
     private boolean nameTaken(String name) {

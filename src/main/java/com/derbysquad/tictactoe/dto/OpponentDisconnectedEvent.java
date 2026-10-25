@@ -5,5 +5,5 @@ package com.derbysquad.tictactoe.dto;
  * ({@code new { secondsLeft }}).
  * Destination: {@code /user/queue/opponent-disconnected}.
  */
-public record OpponentDisconnectedEvent(int secondsLeft) {
+public record OpponentDisconnectedEvent(String matchId, int secondsLeft) {
 }

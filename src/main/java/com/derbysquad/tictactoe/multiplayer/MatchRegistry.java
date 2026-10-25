@@ -3,26 +3,32 @@ package com.derbysquad.tictactoe.multiplayer;
 import com.derbysquad.tictactoe.domain.Board;
 import com.derbysquad.tictactoe.domain.Player;
 import java.time.Instant;
+import java.time.Clock;
+import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import org.springframework.stereotype.Service;
+import org.springframework.scheduling.TaskScheduler;
 
 /**
  * Registry of active networked matches. Port of the C# {@code MatchRegistry}.
  *
- * <p>The C# version guarded everything with one global lock; here storage is a
- * {@link ConcurrentMap} and the compound read-validate-mutate in {@link #tryPlace} /
- * {@link #forfeit} is guarded per-match ({@code synchronized(match)}) — finer-grained but
- * equivalent. The triplicated {@code ComputeWinningCells} is gone: it now lives once in
+ * <p>Compound identity, move, and disconnect transitions share the registry monitor,
+ * including checks across matches. This follows the C# PR1 {@code MatchRegistry}
+ * locking model and prevents a connection occupying two matches. Winning cells live in
  * the domain as {@link Board#winningLine()}.
  */
 @Service
 public class MatchRegistry {
 
     private final ConcurrentMap<String, MultiplayerMatch> matches = new ConcurrentHashMap<>();
+    private final Clock clock;
 
-    public MultiplayerMatch create(String ascConnId, String ascName, String vanConnId, String vanName) {
+    public MatchRegistry() { this(Clock.systemUTC()); }
+    MatchRegistry(Clock clock) { this.clock = clock; }
+
+    public synchronized MultiplayerMatch create(String ascConnId, String ascName, String vanConnId, String vanName) {
         String matchId = UUID.randomUUID().toString().replace("-", "").substring(0, 10);
         String ascToken = UUID.randomUUID().toString().replace("-", "");
         String vanToken = UUID.randomUUID().toString().replace("-", "");
@@ -32,11 +38,11 @@ public class MatchRegistry {
     }
 
     public MultiplayerMatch get(String matchId) {
-        return matches.get(matchId);
+        return matchId == null ? null : matches.get(matchId);
     }
 
-    public PlaceResult tryPlace(String matchId, String fromConnId, int row, int col) {
-        MultiplayerMatch m = matches.get(matchId);
+    public synchronized PlaceResult tryPlace(String matchId, String fromConnId, int row, int col) {
+        MultiplayerMatch m = get(matchId);
         if (m == null) {
             return new PlaceResult(false, null, "no such match");
         }
@@ -50,6 +56,9 @@ public class MatchRegistry {
                             : Player.NONE;
             if (fromFaction == Player.NONE) {
                 return new PlaceResult(false, m, "not a participant");
+            }
+            if (m.disconnects.containsKey(fromConnId)) {
+                return new PlaceResult(false, m, "player disconnected");
             }
             if (m.active() != fromFaction) {
                 return new PlaceResult(false, m, "not your turn");
@@ -69,25 +78,94 @@ public class MatchRegistry {
             } else {
                 m.setActive(Board.other(m.active()));
             }
+            if (m.winner() != null || m.isDraw()) clearDisconnects(m);
             return new PlaceResult(true, m, null);
         }
     }
 
-    public MultiplayerMatch forfeit(String matchId, String forfeiterConnId) {
-        MultiplayerMatch m = matches.get(matchId);
+    public synchronized MultiplayerMatch forfeit(String matchId, String forfeiterConnId) {
+        MultiplayerMatch m = get(matchId);
         if (m == null) {
             return null;
         }
         synchronized (m) {
+            if (!isParticipant(m, forfeiterConnId)) return null;
             if (m.winner() != null || m.isDraw()) {
-                return m;
+                return null;
             }
             m.setWinner(m.ascendantConnId().equals(forfeiterConnId) ? Player.VANGUARD : Player.ASCENDANT);
+            clearDisconnects(m);
             return m;
         }
     }
 
-    public boolean remove(String matchId) {
-        return matches.remove(matchId) != null;
+    public synchronized boolean remove(String matchId) {
+        if (matchId == null) return false;
+        MultiplayerMatch m = matches.remove(matchId);
+        if (m == null) return false;
+        clearDisconnects(m);
+        return true;
+    }
+
+    @FunctionalInterface
+    public interface GraceExpired { void accept(String matchId, String connectionId, UUID leaseId); }
+
+    public synchronized boolean markDisconnected(String matchId, String connectionId,
+            Duration grace, TaskScheduler scheduler, GraceExpired onExpired) {
+        MultiplayerMatch m = get(matchId);
+        if (m == null || m.winner() != null || m.isDraw() || !isParticipant(m, connectionId)
+                || m.disconnects.containsKey(connectionId)) return false;
+        UUID id = UUID.randomUUID();
+        Instant deadline = clock.instant().plus(grace);
+        var task = scheduler.schedule(() -> onExpired.accept(matchId, connectionId, id), deadline);
+        m.disconnects.put(connectionId, new MultiplayerMatch.DisconnectLease(id, deadline, task));
+        return true;
+    }
+
+    public record RejoinResult(MultiplayerMatch match, Player faction, boolean restored) {}
+
+    /** Mirrors C# PR1 TryRejoin: a token can reclaim only its own disconnected seat. */
+    public synchronized RejoinResult tryRejoin(String matchId, String connectionId, String token) {
+        MultiplayerMatch m = get(matchId);
+        if (m == null || connectionId == null || m.winner() != null || m.isDraw()) return null;
+        Player faction = m.factionForToken(token);
+        if (faction == Player.NONE) return null;
+        String oldId = faction == Player.ASCENDANT ? m.ascendantConnId() : m.vanguardConnId();
+        String partner = faction == Player.ASCENDANT ? m.vanguardConnId() : m.ascendantConnId();
+        if (partner.equals(connectionId) || matches.values().stream().anyMatch(other ->
+                other != m && isParticipant(other, connectionId))) return null;
+        if (oldId.equals(connectionId) && !m.disconnects.containsKey(oldId)) {
+            return new RejoinResult(m, faction, false);
+        }
+        var lease = m.disconnects.get(oldId);
+        if (lease == null || !clock.instant().isBefore(lease.expiresAt())) return null;
+        m.disconnects.remove(oldId);
+        if (lease.task() != null) lease.task().cancel(false);
+        if (faction == Player.ASCENDANT) m.setAscendantConnId(connectionId);
+        else m.setVanguardConnId(connectionId);
+        return new RejoinResult(m, faction, true);
+    }
+
+    public synchronized MultiplayerMatch forfeitDisconnected(String matchId, String connectionId, UUID leaseId) {
+        MultiplayerMatch m = get(matchId);
+        if (m == null || m.winner() != null || m.isDraw() || !isParticipant(m, connectionId)) return null;
+        var lease = m.disconnects.get(connectionId);
+        if (lease == null || !lease.id().equals(leaseId) || clock.instant().isBefore(lease.expiresAt())) return null;
+        return forfeit(matchId, connectionId);
+    }
+
+    public synchronized int remainingGraceSeconds(MultiplayerMatch m, String connectionId) {
+        var lease = m.disconnects.get(connectionId);
+        if (lease == null) return 0;
+        return (int) Math.max(1, (Duration.between(clock.instant(), lease.expiresAt()).toMillis() + 999) / 1000);
+    }
+
+    public static boolean isParticipant(MultiplayerMatch m, String connectionId) {
+        return m.ascendantConnId().equals(connectionId) || m.vanguardConnId().equals(connectionId);
+    }
+
+    private void clearDisconnects(MultiplayerMatch m) {
+        for (var lease : m.disconnects.values()) if (lease.task() != null) lease.task().cancel(false);
+        m.disconnects.clear();
     }
 }

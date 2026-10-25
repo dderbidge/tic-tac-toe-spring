@@ -8,6 +8,7 @@ import com.derbysquad.tictactoe.dto.ChallengeAcceptedEvent;
 import com.derbysquad.tictactoe.dto.ChallengeDeclinedEvent;
 import com.derbysquad.tictactoe.dto.ChallengeExpiredEvent;
 import com.derbysquad.tictactoe.dto.ChallengePlayerRequest;
+import com.derbysquad.tictactoe.dto.ChallengeSentEvent;
 import com.derbysquad.tictactoe.dto.IncomingChallengeEvent;
 import com.derbysquad.tictactoe.dto.LobbyStateEvent;
 import com.derbysquad.tictactoe.dto.MatchEndedEvent;
@@ -20,8 +21,9 @@ import com.derbysquad.tictactoe.dto.PlayerJoinedEvent;
 import com.derbysquad.tictactoe.dto.PlayerLeftEvent;
 import com.derbysquad.tictactoe.dto.RejoinMatchRequest;
 import com.derbysquad.tictactoe.dto.RespondToChallengeRequest;
-import java.time.Instant;
+import java.time.Duration;
 import java.util.List;
+import java.util.UUID;
 import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
@@ -44,6 +46,10 @@ import org.springframework.web.socket.messaging.SessionDisconnectEvent;
  * <p>Lifecycle that SignalR put in {@code OnDisconnectedAsync} is handled via
  * {@link SessionDisconnectEvent}; the challenge-expiry bridge that C# wired in
  * {@code Program.cs} is an {@code @EventListener} for {@link ChallengeExpiredAppEvent}.
+ *
+ * <p>Handlers and expiry callbacks share this controller's monitor. Occupancy validation,
+ * registry mutation, presence changes, and queued snapshots form one transition; two
+ * simultaneous challenge accepts cannot put a player in two matches.
  */
 @Controller
 public class GameMessageController {
@@ -75,7 +81,8 @@ public class GameMessageController {
     // ─── Lobby ─────────────────────────────────────────────────────
 
     @MessageMapping("/lobby/enter")
-    public void enterLobby(@Header("simpSessionId") String connId) {
+    public synchronized void enterLobby(@Header("simpSessionId") String connId) {
+        if (presence.currentMatchOf(connId) != null) return;
         if (presence.get(connId) == null) {
             presence.add(connId);
         }
@@ -89,7 +96,8 @@ public class GameMessageController {
     }
 
     @MessageMapping("/lobby/leave")
-    public void leaveLobby(@Header("simpSessionId") String connId) {
+    public synchronized void leaveLobby(@Header("simpSessionId") String connId) {
+        if (presence.currentMatchOf(connId) != null) return;
         presence.remove(connId);
         challenges.removeAllInvolving(connId);
         messaging.convertAndSend(LOBBY_LEFT, new PlayerLeftEvent(connId));
@@ -98,29 +106,40 @@ public class GameMessageController {
     // ─── Challenges ────────────────────────────────────────────────
 
     @MessageMapping("/challenge/send")
-    public void challengePlayer(@Header("simpSessionId") String connId, @Payload ChallengePlayerRequest req) {
+    public synchronized void challengePlayer(@Header("simpSessionId") String connId, @Payload ChallengePlayerRequest req) {
+        if (req == null || connId.equals(req.targetConnId())) return;
         PlayerSession from = presence.get(connId);
         PlayerSession to = presence.get(req.targetConnId());
         if (from == null || to == null) return;
         if (presence.currentMatchOf(connId) != null) return;
         if (presence.currentMatchOf(req.targetConnId()) != null) return;
 
+        challenges.removeAllInvolving(connId);
         Challenge c = challenges.create(connId, from.name(), req.targetConnId(), to.name());
+        sendToUser(connId, "/queue/challenge-sent",
+                new ChallengeSentEvent(c.challengeId(), c.toConnId(), c.toName()));
         sendToUser(req.targetConnId(), "/queue/challenge-incoming",
                 new IncomingChallengeEvent(c.challengeId(), connId, from.name()));
     }
 
     @MessageMapping("/challenge/respond")
-    public void respondToChallenge(@Header("simpSessionId") String connId, @Payload RespondToChallengeRequest req) {
-        Challenge c = challenges.take(req.challengeId());
+    public synchronized void respondToChallenge(@Header("simpSessionId") String connId, @Payload RespondToChallengeRequest req) {
+        if (req == null) return;
+        Challenge c = challenges.take(req.challengeId(), connId);
         if (c == null) return;
-        if (!c.toConnId().equals(connId)) return;
 
         if (!req.accept()) {
-            sendToUser(c.fromConnId(), "/queue/challenge-declined", new ChallengeDeclinedEvent(c.toName()));
+            sendToUser(c.fromConnId(), "/queue/challenge-declined", new ChallengeDeclinedEvent(c.challengeId(), c.toName()));
             return;
         }
 
+        if (presence.get(c.fromConnId()) == null || presence.get(c.toConnId()) == null
+                || presence.currentMatchOf(c.fromConnId()) != null || presence.currentMatchOf(c.toConnId()) != null) {
+            onChallengeExpired(new ChallengeExpiredAppEvent(c));
+            return;
+        }
+        challenges.removeAllInvolving(c.fromConnId());
+        challenges.removeAllInvolving(c.toConnId());
         MultiplayerMatch match = matches.create(c.fromConnId(), c.fromName(), c.toConnId(), c.toName());
         presence.enterMatch(c.fromConnId(), match.matchId());
         presence.enterMatch(c.toConnId(), match.matchId());
@@ -136,16 +155,26 @@ public class GameMessageController {
     }
 
     @MessageMapping("/challenge/cancel")
-    public void cancelChallenge(@Header("simpSessionId") String connId, @Payload com.derbysquad.tictactoe.dto.CancelChallengeRequest req) {
-        challenges.cancel(req.challengeId(), connId);
+    public synchronized void cancelChallenge(@Header("simpSessionId") String connId, @Payload com.derbysquad.tictactoe.dto.CancelChallengeRequest req) {
+        if (req != null) challenges.cancel(req.challengeId(), connId);
     }
 
     // ─── Match ─────────────────────────────────────────────────────
 
     @MessageMapping("/match/move")
-    public void placeMove(@Header("simpSessionId") String connId, @Payload PlaceMoveRequest req) {
+    public synchronized void placeMove(@Header("simpSessionId") String connId, @Payload PlaceMoveRequest req) {
+        if (req == null) return;
+        MultiplayerMatch current = matches.get(req.matchId());
+        if (current == null || !MatchRegistry.isParticipant(current, connId)) return;
+        if (req.row() == null || req.col() == null) {
+            sendMatchState(current, connId);
+            return;
+        }
         PlaceResult result = matches.tryPlace(req.matchId(), connId, req.row(), req.col());
-        if (!result.accepted() || result.match() == null) return;
+        if (!result.accepted() || result.match() == null) {
+            sendMatchState(current, connId);
+            return;
+        }
 
         broadcastMatchState(result.match());
 
@@ -156,7 +185,8 @@ public class GameMessageController {
     }
 
     @MessageMapping("/match/forfeit")
-    public void forfeitMatch(@Header("simpSessionId") String connId, @Payload com.derbysquad.tictactoe.dto.ForfeitMatchRequest req) {
+    public synchronized void forfeitMatch(@Header("simpSessionId") String connId, @Payload com.derbysquad.tictactoe.dto.ForfeitMatchRequest req) {
+        if (req == null) return;
         MultiplayerMatch m = matches.forfeit(req.matchId(), connId);
         if (m == null) return;
         broadcastMatchEnded(m, "forfeit");
@@ -164,60 +194,48 @@ public class GameMessageController {
     }
 
     @MessageMapping("/match/rematch")
-    public void requestRematch(@Payload com.derbysquad.tictactoe.dto.RequestRematchRequest req) {
+    public synchronized void requestRematch(@Payload com.derbysquad.tictactoe.dto.RequestRematchRequest req) {
         // v1 no-op (clients return to lobby and re-challenge); mirrors the C# stub.
     }
 
     @MessageMapping("/match/rejoin")
-    public void rejoinMatch(@Header("simpSessionId") String connId, @Payload RejoinMatchRequest req) {
-        MultiplayerMatch m = matches.get(req.matchId());
-        if (m == null) return; // match gone (e.g. grace expired) — client falls back to the menu
-        Player faction = m.factionForToken(req.token());
-        if (faction == Player.NONE) return; // bad/missing token — ignore (anti-hijack)
-
-        String oldConnId = faction == Player.ASCENDANT ? m.ascendantConnId() : m.vanguardConnId();
-        if (faction == Player.ASCENDANT) {
-            m.setAscendantConnId(connId);
-        } else {
-            m.setVanguardConnId(connId);
-        }
-
-        boolean wasDisconnected = oldConnId.equals(m.disconnectedConnId());
-        if (wasDisconnected) {
-            m.setDisconnectedConnId(null);
-            cancelGraceTimer(m);
-        }
-
-        presence.enterMatch(connId, m.matchId());
+    public synchronized void rejoinMatch(@Header("simpSessionId") String connId, @Payload RejoinMatchRequest req) {
+        if (req == null) return;
+        var restored = matches.tryRejoin(req.matchId(), connId, req.token());
+        if (restored == null) return;
+        MultiplayerMatch m = restored.match();
+        Player faction = restored.faction();
+        String name = faction == Player.ASCENDANT ? m.ascendantName() : m.vanguardName();
+        presence.restoreMatch(connId, name, m.matchId());
+        challenges.removeAllInvolving(connId);
+        messaging.convertAndSend(LOBBY_LEFT, new PlayerLeftEvent(connId));
         String partner = faction == Player.ASCENDANT ? m.vanguardConnId() : m.ascendantConnId();
-        if (wasDisconnected) {
-            sendToUser(partner, "/queue/opponent-reconnected", new OpponentReconnectedEvent());
+        if (restored.restored()) {
+            sendToUser(partner, "/queue/opponent-reconnected", new OpponentReconnectedEvent(m.matchId()));
         }
         // Restore the rejoining client's context (faction/opponent/token), then the board.
         String opponentName = faction == Player.ASCENDANT ? m.vanguardName() : m.ascendantName();
         sendToUser(connId, "/queue/challenge-accepted",
                 new ChallengeAcceptedEvent(m.matchId(), opponentName, factionName(faction), m.tokenFor(faction)));
         broadcastMatchState(m);
+        int remaining = matches.remainingGraceSeconds(m, partner);
+        if (remaining > 0) sendToUser(connId, "/queue/opponent-disconnected", new OpponentDisconnectedEvent(m.matchId(), remaining));
     }
 
     // ─── Lifecycle (was OnDisconnectedAsync) ───────────────────────
 
     @EventListener
-    public void onSessionDisconnect(SessionDisconnectEvent event) {
+    public synchronized void onSessionDisconnect(SessionDisconnectEvent event) {
         String connId = event.getSessionId();
 
         String matchId = presence.currentMatchOf(connId);
         if (matchId != null) {
             MultiplayerMatch m = matches.get(matchId);
-            if (m != null && m.winner() == null && !m.isDraw()) {
-                m.setDisconnectedConnId(connId);
-                cancelGraceTimer(m);
-                m.setDisconnectTask(taskScheduler.schedule(
-                        () -> onGraceExpired(matchId, connId),
-                        Instant.now().plusSeconds(disconnectGraceSeconds)));
+            if (m != null && matches.markDisconnected(matchId, connId,
+                    Duration.ofSeconds(disconnectGraceSeconds), taskScheduler, this::onGraceExpired)) {
                 String partner = m.ascendantConnId().equals(connId) ? m.vanguardConnId() : m.ascendantConnId();
                 sendToUser(partner, "/queue/opponent-disconnected",
-                        new OpponentDisconnectedEvent(disconnectGraceSeconds));
+                        new OpponentDisconnectedEvent(matchId, disconnectGraceSeconds));
             }
         }
         presence.remove(connId);
@@ -229,7 +247,7 @@ public class GameMessageController {
     // ─── Challenge-expiry bridge (was the Program.cs broker.Expired wiring) ───
 
     @EventListener
-    public void onChallengeExpired(ChallengeExpiredAppEvent event) {
+    public synchronized void onChallengeExpired(ChallengeExpiredAppEvent event) {
         Challenge c = event.challenge();
         sendToUser(c.fromConnId(), "/queue/challenge-expired", new ChallengeExpiredEvent(c.challengeId(), "from"));
         sendToUser(c.toConnId(), "/queue/challenge-expired", new ChallengeExpiredEvent(c.challengeId(), "to"));
@@ -238,6 +256,11 @@ public class GameMessageController {
     // ─── Helpers ───────────────────────────────────────────────────
 
     private void broadcastMatchState(MultiplayerMatch m) {
+        sendMatchState(m, m.ascendantConnId());
+        sendMatchState(m, m.vanguardConnId());
+    }
+
+    private void sendMatchState(MultiplayerMatch m, String connId) {
         MatchStateEvent payload = new MatchStateEvent(
                 m.matchId(),
                 serializeBoard(m.board()),
@@ -245,8 +268,7 @@ public class GameMessageController {
                 factionName(m.winner()),
                 m.isDraw(),
                 toCellDtos(m.winningCells()));
-        sendToUser(m.ascendantConnId(), "/queue/match-state", payload);
-        sendToUser(m.vanguardConnId(), "/queue/match-state", payload);
+        sendToUser(connId, "/queue/match-state", payload);
     }
 
     private void broadcastMatchEnded(MultiplayerMatch m, String reason) {
@@ -263,20 +285,11 @@ public class GameMessageController {
         matches.remove(m.matchId());
     }
 
-    private void onGraceExpired(String matchId, String disconnectedConnId) {
-        MultiplayerMatch m = matches.get(matchId);
-        if (m == null || !disconnectedConnId.equals(m.disconnectedConnId())) return;
-        m.setWinner(m.ascendantConnId().equals(disconnectedConnId) ? Player.VANGUARD : Player.ASCENDANT);
-        String partner = m.ascendantConnId().equals(disconnectedConnId) ? m.vanguardConnId() : m.ascendantConnId();
-        sendToUser(partner, "/queue/match-ended", new MatchEndedEvent(m.matchId(), "win", "forfeit", null));
+    private synchronized void onGraceExpired(String matchId, String disconnectedConnId, UUID leaseId) {
+        MultiplayerMatch m = matches.forfeitDisconnected(matchId, disconnectedConnId, leaseId);
+        if (m == null) return;
+        broadcastMatchEnded(m, "forfeit");
         endMatchAndReturnPlayersToLobby(m);
-    }
-
-    private void cancelGraceTimer(MultiplayerMatch m) {
-        if (m.disconnectTask() != null) {
-            m.disconnectTask().cancel(false);
-            m.setDisconnectTask(null);
-        }
     }
 
     /** Result token from a recipient's perspective: win / loss / draw. */

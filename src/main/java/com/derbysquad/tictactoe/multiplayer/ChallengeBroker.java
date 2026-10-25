@@ -42,19 +42,35 @@ public class ChallengeBroker {
         return c;
     }
 
-    public Challenge take(String challengeId) {
-        return challenges.remove(challengeId);
+    public Challenge take(String challengeId, String recipientId) {
+        if (challengeId == null) return null;
+        Challenge challenge = challenges.get(challengeId);
+        if (challenge == null || !challenge.toConnId().equals(recipientId)) return null;
+        if (!challenges.remove(challengeId, challenge)) return null;
+        if (!challenge.expiresAt().isAfter(Instant.now())) {
+            publisher.publishEvent(new ChallengeExpiredAppEvent(challenge));
+            return null;
+        }
+        return challenge;
     }
 
     /** Removes the challenge only if it exists and is owned by {@code fromConnId}. */
     public boolean cancel(String challengeId, String fromConnId) {
-        return challenges.entrySet().removeIf(e ->
-                e.getKey().equals(challengeId) && e.getValue().fromConnId().equals(fromConnId));
+        if (challengeId == null) return false;
+        Challenge challenge = challenges.get(challengeId);
+        if (challenge == null || !challenge.fromConnId().equals(fromConnId)
+                || !challenges.remove(challengeId, challenge)) return false;
+        publisher.publishEvent(new ChallengeExpiredAppEvent(challenge));
+        return true;
     }
 
     public void removeAllInvolving(String connectionId) {
-        challenges.values().removeIf(c ->
-                c.fromConnId().equals(connectionId) || c.toConnId().equals(connectionId));
+        for (Challenge challenge : challenges.values()) {
+            if ((challenge.fromConnId().equals(connectionId) || challenge.toConnId().equals(connectionId))
+                    && challenges.remove(challenge.challengeId(), challenge)) {
+                publisher.publishEvent(new ChallengeExpiredAppEvent(challenge));
+            }
+        }
     }
 
     @Scheduled(fixedRateString = "${tictactoe.challenge.sweep-ms:5000}")
