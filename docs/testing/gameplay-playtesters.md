@@ -79,4 +79,3 @@ The October 2026 verification used this runner through the supported browser too
 plus separate two-tab challenge, reconnect and forfeit checks. The existing
 Playwright smoke suite remains a separate option; do not treat it as executed
 merely because the tool-controlled runner passed.
-
